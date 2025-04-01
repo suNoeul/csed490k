@@ -1,0 +1,17 @@
+Directories:
+
+  openmp: template for OpenMP program for LU decomposition
+
+    Files:
+
+      lu-omp.cpp: template for OpenMP solution
+
+      Makefile:
+        a Makefile that includes recipes for building and running your program
+
+        usage:
+
+          make # builds your code
+          make runp # runs a parallel version of your code on W workers
+          make runs # runs a serial version of your code on one worker. This is not working now.
+          make check # runs your parallel code with Intel Thread Checker
