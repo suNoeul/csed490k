@@ -1,29 +1,36 @@
 #include <iostream>
 #include <omp.h>
 
-#include <random>  // C++11 RNG
-#include <chrono> // 시간 측정용
-#include <cstdlib>
-#include <ctime>
-#include <cmath>
-#include <algorithm>
+#include <random>     // Random number generation (C++11)
+#include <chrono>     // Time measurement
+#include <cstdlib>    // atoi, exit
+#include <ctime>      // time(NULL) for seeding RNG
+#include <cmath>      // sqrt, abs
+#include <algorithm>  // std::swap
 
-#define DO_VERIFY 1 // 검증 모드 (0으로 바꾸면 컴파일 제외)
+#define DO_VERIFY 1   // Enable verification mode (set to 0 for submission)
 
 using namespace std;
 
 
-void allocate_multiple_matrices(double*** matrices[], int n);
-void free_multiple_matrices(double*** matrices[], int n);
+// =================== Custom Function Declarations =================== //
 
 double** allocate_matrix(int n);
 void free_matrix(double** m, int n);
+
+void allocate_multiple_matrices(double*** matrices[], int n);
+void free_multiple_matrices(double*** matrices[], int n);
 
 void extract_LU(double** a, double** L, double** U, int n);
 void apply_permutation(double** src, double** dst, int* pi, int n);
 void matrix_multiply(double** A, double** B, double** C, int n);
 void compute_residual(double** PA, double** LU, double** R, int n);
 double compute_l21_norm(double** R, int n);
+double verify_result(double** L, double** U, double** PA, double** LU, double** R,  
+                     double** a, double** orig, int* pi, int n);
+
+
+// ========================== Core Functions ========================== //
 
 void usage(const char *name) {
 	std::cout << "usage: " << name << " matrix-size nworkers" << std::endl;
@@ -31,12 +38,12 @@ void usage(const char *name) {
 }
 
 void lu_decomposition(double** a, int* pi, int n){
-  // pi 초기화
+  // Initialize the pivot index array
   for(int i = 0; i < n; i++)
     pi[i] = i;
 
     for (int k = 0; k < n; ++k) {
-      // 1. Pivot 선택 (|a[i][k]| 최대 찾기)
+      // 1. Select pivot row (row with the largest |a[i][k]| below the diagonal)
       double max_val = 0.0;
       int k_prime = k;
 
@@ -48,23 +55,23 @@ void lu_decomposition(double** a, int* pi, int n){
           }
       }
 
-      // 2. Singular 체크
+      // 2. Check for singular matrix
       if (max_val == 0.0) {
           std::cerr << "LU Decomposition Error: Singular matrix!" << std::endl;
           exit(EXIT_FAILURE);
       }
 
-      // 3. 행 교환 (π, A)
+      // 3. Swap rows in pivot array and matrix A
       std::swap(pi[k], pi[k_prime]);
-      std::swap( a[k], a[k_prime]);  // 포인터 swap → 전체 행 교환
+      std::swap( a[k],  a[k_prime]);  
 
-      // 4. L, U 계산
+      // 4. Compute L(i,k) = a(i,k) / U(k,k)
     #pragma omp parallel for
       for (int i = k + 1; i < n; ++i) {
-          a[i][k] /= a[k][k];  // L(i,k) = a(i,k) / U(k,k)
+          a[i][k] /= a[k][k];  
       }
 
-      // 5. 아래쪽 A 갱신 (Schur complement)
+      // 5. Update the remaining submatrix (Schur complement)
     #pragma omp parallel for collapse(2)
       for (int i = k + 1; i < n; ++i) {
           for (int j = k + 1; j < n; ++j) {
@@ -77,29 +84,30 @@ void lu_decomposition(double** a, int* pi, int n){
 int main(int argc, char **argv) {
   const char *name = argv[0];
   if (argc < 3) usage(name);
-
   int matrix_size = atoi(argv[1]);
   int nworkers = atoi(argv[2]);
-
   std::cout << name << ": " << matrix_size << " " << nworkers << std::endl;
 
+  int n = matrix_size;
+  int* pi = new int[n];
   omp_set_num_threads(nworkers);
 
-  // 1) NxN 배열 Allocation
-  int n = matrix_size;
+
+  // 1) Allocate NxN matrix A
   double** a = allocate_matrix(n);
+
 #if DO_VERIFY
+  // Allocate matrices for verification
   double **orig, **L, **U, **PA, **LU, **R;
   double ***matrices[] = { &orig, &L, &U, &PA, &LU, &R };
   allocate_multiple_matrices(matrices, n);
 #endif
 
-  // 2) 병렬 난수 초기화 (use omp)
+  // 2) Initialize matrix A with random values using multiple threads
 #pragma omp parallel
   {
-    // 스레드 ID별로 고유한 시드값 사용
     int tid = omp_get_thread_num();
-    std::mt19937 rng(time(NULL) + tid); // seed 다르게
+    std::mt19937 rng(time(NULL) + tid); // Thread-local random seed
     std::uniform_real_distribution<double> dist(0.0, 1.0);
 
   #pragma omp for collapse(2)
@@ -112,42 +120,49 @@ int main(int argc, char **argv) {
         }
   }
 
-  // LU 분해 시간 측정 시작
+  // 3) Perform LU decomposition with timing
   auto start = std::chrono::high_resolution_clock::now();
-
-  // 3) LU decomposition
-  int* pi = new int[n];
   lu_decomposition(a, pi, n);
-
   auto end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> elapsed = end - start;
-
   std::cout << "LU decomposition time: " << elapsed.count() << " seconds\n";
 
-  // 결과 검증
 #if DO_VERIFY
-  auto verity_start = std::chrono::high_resolution_clock::now();
-  extract_LU(a, L, U, n);
-  apply_permutation(orig, PA, pi, n);
-  matrix_multiply(L, U, LU, n);
-  compute_residual(PA, LU, R, n);
-  double norm = compute_l21_norm(R, n);
-  auto verity_end = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> verity_elapsed = verity_end - verity_start;
+  // 4) Verification steps
+  auto verify_start = std::chrono::high_resolution_clock::now();
+  double norm = verify_result(L, U, PA, LU, R, a, orig, pi, n);
+  auto verify_end = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> verify_elapsed = verify_end - verify_start;
 
-  std::cout << "Verification time: " << verity_elapsed.count() << " seconds\n";
+  std::cout << "Verification time: " << verify_elapsed.count() << " seconds\n";
   std::cout << "L2,1 norm of residual: " << norm << std::endl;
-
+  
+  // Free verification-related matrices
   free_multiple_matrices(matrices, n);
 #endif
 
-  // 4) Memory Free
+  // 5) Free allocated memory
   free_matrix(a, n);
   delete[] pi;
+
+
   return 0;
 }
 
-/* ---------------------------------------------------------------------------- */
+
+// =================== Custom Function Definitions ==================== //
+
+double** allocate_matrix(int n) {
+  double** m = new double*[n];
+  for (int i = 0; i < n; ++i)
+      m[i] = new double[n];
+  return m;
+}
+
+void free_matrix(double** m, int n) {
+  for (int i = 0; i < n; ++i) delete[] m[i];
+  delete[] m;
+}
 
 void allocate_multiple_matrices(double*** matrices[], int n) {
   for (int i = 0; i < 6; ++i)
@@ -213,17 +228,11 @@ double compute_l21_norm(double** R, int n) {
   return norm;
 }
 
-double** allocate_matrix(int n) {
-  double** m = new double*[n];
-  for (int i = 0; i < n; ++i)
-      m[i] = new double[n];
-  return m;
+double verify_result(double** L, double** U, double** PA, double** LU, double** R,  
+                     double** a, double** orig, int* pi, int n) {
+  extract_LU(a, L, U, n);
+  apply_permutation(orig, PA, pi, n);
+  matrix_multiply(L, U, LU, n);
+  compute_residual(PA, LU, R, n);
+  return compute_l21_norm(R, n);
 }
-
-void free_matrix(double** m, int n) {
-  for (int i = 0; i < n; ++i) delete[] m[i];
-  delete[] m;
-}
-
-
-
