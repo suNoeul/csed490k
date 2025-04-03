@@ -2,98 +2,32 @@
 #include <omp.h>
 
 #include <random>  // C++11 RNG
+#include <chrono> // 시간 측정용
 #include <cstdlib>
 #include <ctime>
 #include <cmath>
 #include <algorithm>
 
-#include <chrono> // 시간 측정용
+#define DO_VERIFY 1 // 검증 모드 (0으로 바꾸면 컴파일 제외)
 
-void lu_decomposition(double** a, int* pi, int n);
+using namespace std;
+
+
+void allocate_multiple_matrices(double*** matrices[], int n);
+void free_multiple_matrices(double*** matrices[], int n);
+
+double** allocate_matrix(int n);
+void free_matrix(double** m, int n);
+
 void extract_LU(double** a, double** L, double** U, int n);
 void apply_permutation(double** src, double** dst, int* pi, int n);
 void matrix_multiply(double** A, double** B, double** C, int n);
 void compute_residual(double** PA, double** LU, double** R, int n);
 double compute_l21_norm(double** R, int n);
-double** allocate_matrix(int n);
-void free_matrix(double** m, int n);
-
 
 void usage(const char *name) {
 	std::cout << "usage: " << name << " matrix-size nworkers" << std::endl;
  	exit(-1);
-}
-
-int main(int argc, char **argv) {
-  const char *name = argv[0];
-  if (argc < 3) usage(name);
-
-  int matrix_size = atoi(argv[1]);
-  int nworkers = atoi(argv[2]);
-
-  std::cout << name << ": " << matrix_size << " " << nworkers << std::endl;
-
-  omp_set_num_threads(nworkers);
-
-  // 1) NxN 배열 Allocation
-  int n = matrix_size;
-  double** a = allocate_matrix(n);
-  double** orig = allocate_matrix(n);
-
-  // 2) 병렬 난수 초기화 (use omp)
-#pragma omp parallel
-  {
-    // 스레드 ID별로 고유한 시드값 사용
-    int tid = omp_get_thread_num();
-    std::mt19937 rng(time(NULL) + tid); // seed 다르게
-    std::uniform_real_distribution<double> dist(0.0, 1.0);
-
-  #pragma omp for collapse(2)
-    for (int i = 0; i < n; ++i)
-        for (int j = 0; j < n; ++j){
-          orig[i][j] = dist(rng);
-          a[i][j] = orig[i][j];
-        }
-  }
-
-  // LU 분해 시간 측정 시작
-  auto start = std::chrono::high_resolution_clock::now();
-
-  // 3) LU decomposition
-  int* pi = new int[n];
-  lu_decomposition(a, pi, n);
-
-  auto end = std::chrono::high_resolution_clock::now();
-  std::chrono::duration<double> elapsed = end - start;
-
-  std::cout << "LU decomposition time: " << elapsed.count() << " seconds\n";
-
-  // 결과 검증
-  double** L = allocate_matrix(n);
-  double** U = allocate_matrix(n);
-  double** PA = allocate_matrix(n);
-  double** LU = allocate_matrix(n);
-  double** R  = allocate_matrix(n);
-
-  extract_LU(a, L, U, n);
-  apply_permutation(orig, PA, pi, n);
-  matrix_multiply(L, U, LU, n);
-  compute_residual(PA, LU, R, n);
-  double norm = compute_l21_norm(R, n);
-
-  std::cout << "L2,1 norm of residual: " << norm << std::endl;
-
-  // 4) Memory Free
-  free_matrix(a, n);
-  free_matrix(orig, n);
-  free_matrix(L, n);
-  free_matrix(U, n);
-  free_matrix(PA, n);
-  free_matrix(LU, n);
-  free_matrix(R, n);
-  delete[] pi;
-
-  return 0;
 }
 
 void lu_decomposition(double** a, int* pi, int n){
@@ -138,6 +72,91 @@ void lu_decomposition(double** a, int* pi, int n){
           }
       }
   }
+}
+
+int main(int argc, char **argv) {
+  const char *name = argv[0];
+  if (argc < 3) usage(name);
+
+  int matrix_size = atoi(argv[1]);
+  int nworkers = atoi(argv[2]);
+
+  std::cout << name << ": " << matrix_size << " " << nworkers << std::endl;
+
+  omp_set_num_threads(nworkers);
+
+  // 1) NxN 배열 Allocation
+  int n = matrix_size;
+  double** a = allocate_matrix(n);
+#if DO_VERIFY
+  double **orig, **L, **U, **PA, **LU, **R;
+  double ***matrices[] = { &orig, &L, &U, &PA, &LU, &R };
+  allocate_multiple_matrices(matrices, n);
+#endif
+
+  // 2) 병렬 난수 초기화 (use omp)
+#pragma omp parallel
+  {
+    // 스레드 ID별로 고유한 시드값 사용
+    int tid = omp_get_thread_num();
+    std::mt19937 rng(time(NULL) + tid); // seed 다르게
+    std::uniform_real_distribution<double> dist(0.0, 1.0);
+
+  #pragma omp for collapse(2)
+    for (int i = 0; i < n; ++i)
+        for (int j = 0; j < n; ++j){
+          a[i][j] = dist(rng);
+#if DO_VERIFY
+          orig[i][j] = a[i][j];
+#endif
+        }
+  }
+
+  // LU 분해 시간 측정 시작
+  auto start = std::chrono::high_resolution_clock::now();
+
+  // 3) LU decomposition
+  int* pi = new int[n];
+  lu_decomposition(a, pi, n);
+
+  auto end = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> elapsed = end - start;
+
+  std::cout << "LU decomposition time: " << elapsed.count() << " seconds\n";
+
+  // 결과 검증
+#if DO_VERIFY
+  auto verity_start = std::chrono::high_resolution_clock::now();
+  extract_LU(a, L, U, n);
+  apply_permutation(orig, PA, pi, n);
+  matrix_multiply(L, U, LU, n);
+  compute_residual(PA, LU, R, n);
+  double norm = compute_l21_norm(R, n);
+  auto verity_end = std::chrono::high_resolution_clock::now();
+  std::chrono::duration<double> verity_elapsed = verity_end - verity_start;
+
+  std::cout << "Verification time: " << verity_elapsed.count() << " seconds\n";
+  std::cout << "L2,1 norm of residual: " << norm << std::endl;
+
+  free_multiple_matrices(matrices, n);
+#endif
+
+  // 4) Memory Free
+  free_matrix(a, n);
+  delete[] pi;
+  return 0;
+}
+
+/* ---------------------------------------------------------------------------- */
+
+void allocate_multiple_matrices(double*** matrices[], int n) {
+  for (int i = 0; i < 6; ++i)
+      *matrices[i] = allocate_matrix(n);
+}
+
+void free_multiple_matrices(double*** matrices[], int n) {
+  for (int i = 0; i < 6; ++i)
+      free_matrix(*matrices[i], n);
 }
 
 void extract_LU(double** a, double** L, double** U, int n) {
@@ -205,7 +224,6 @@ void free_matrix(double** m, int n) {
   for (int i = 0; i < n; ++i) delete[] m[i];
   delete[] m;
 }
-
 
 
 
