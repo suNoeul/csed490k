@@ -8,7 +8,7 @@
 #include <cmath>      // sqrt, abs
 #include <algorithm>  // std::swap
 
-#define DO_VERIFY 1   // Enable verification mode (set to 0 for submission)
+#define DO_VERIFY 0   // Enable verification mode (set to 0 for submission)
 
 using namespace std;
 
