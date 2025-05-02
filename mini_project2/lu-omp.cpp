@@ -43,8 +43,8 @@ void print_matrix(const std::vector<std::vector<double>>& mat, const char* name)
 }
 
 void lu_decomposition(Matrix& A_input, Matrix& L, Matrix& U, int n, int t) { 
-    /* Basic LU decomposition (A = LU)*/
-    
+    /* Basic LU decomposition (A = LU) */
+
     omp_set_num_threads(t);  
     Matrix A = A_input;    
 
@@ -82,7 +82,7 @@ void lu_decomposition(Matrix& A_input, Matrix& L, Matrix& U, int n, int t) {
 
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
-    std::cout << "LU decomposition time: " << elapsed.count() << " seconds\n";          
+    std::cout << "A = LU decomposition(OMP) time: " << elapsed.count() << " seconds\n";          
 }
 
 void lu_decomposition_omp(Matrix& A_input, Matrix& L, Matrix& U, int n, int t) {
@@ -143,7 +143,7 @@ void lu_decomposition_omp(Matrix& A_input, Matrix& L, Matrix& U, int n, int t) {
     
     auto end = std::chrono::high_resolution_clock::now();
     std::chrono::duration<double> elapsed = end - start;
-    std::cout << "LU decomposition time: " << elapsed.count() << " seconds\n";       
+    std::cout << "PA = LU decomposition(OMP) time: " << elapsed.count() << " seconds\n";       
 }
 
 int main(int argc, char* argv[]) {

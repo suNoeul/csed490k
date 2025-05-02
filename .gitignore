@@ -1,1 +1,10 @@
 /.vscode
+
+# Ignore all except the following items in mini_project2
+/mini_project2/*
+!/mini_project2/Makefile
+!/mini_project2/lu-omp.cpp
+!/mini_project2/lu-pthread.cpp
+!/mini_project2/._Makefile
+!/mini_project2/._lu-omp.cpp
+!/mini_project2/._lu-pthread.cpp
