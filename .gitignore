@@ -8,3 +8,4 @@
 !/mini_project2/._Makefile
 !/mini_project2/._lu-omp.cpp
 !/mini_project2/._lu-pthread.cpp
+!/mini_project2/run_all.sh

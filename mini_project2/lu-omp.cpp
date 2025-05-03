@@ -4,7 +4,10 @@
 #include <cstdlib>
 #include <cstdio>
 #include <chrono>     
+
+#ifdef PARALLEL
 #include <omp.h>
+#endif
 
 using Matrix = std::vector<std::vector<double>>;
 
@@ -45,7 +48,10 @@ void print_matrix(const std::vector<std::vector<double>>& mat, const char* name)
 void lu_decomposition(Matrix& A_input, Matrix& L, Matrix& U, int n, int t) { 
     /* Basic LU decomposition (A = LU) */
 
-    omp_set_num_threads(t);  
+#ifdef PARALLEL
+    omp_set_num_threads(t);
+#endif
+
     Matrix A = A_input;    
 
     auto start = std::chrono::high_resolution_clock::now();
@@ -88,7 +94,10 @@ void lu_decomposition(Matrix& A_input, Matrix& L, Matrix& U, int n, int t) {
 void lu_decomposition_omp(Matrix& A_input, Matrix& L, Matrix& U, int n, int t) {
     /* LU decomposition with partial pivoting (PA = LU) */
 
-    omp_set_num_threads(t);  
+#ifdef PARALLEL
+    omp_set_num_threads(t);
+#endif
+
     Matrix A = A_input;  
 
     auto start = std::chrono::high_resolution_clock::now();
