@@ -1,6 +1,6 @@
 #include "project3.hpp"
 
-// 마스터 프로세스: 보드 입력 받고 각 프로세스에 조각 전송 (one-to-one)
+// Master process: receives board input and sends pieces to each process (one-to-one)
 void read_input_and_distribute(const Env& env, const Board& board, Board& local_board) {   
     for (int process_rank = 0; process_rank < env.size; ++process_rank) {    
         int start = process_rank * env.base;
@@ -12,27 +12,28 @@ void read_input_and_distribute(const Env& env, const Board& board, Board& local_
                 for (int j = 0; j < env.m; ++j)
                     local_board[i + env.ghost][j + env.ghost] = board[row_idx][j];
             } else {
-                // one-to-one 전송
+                // one-to-one transfer
                 MPI_Send(board[row_idx].data(), env.m, MPI_CHAR, process_rank, 0, MPI_COMM_WORLD); 
             }
         }
     }
 }
 
-// 각 프로세스: 마스터로부터 보드 조각 수신 (one-to-one)
+// Each process: receives board pieces from the master (one-to-one)
 void receive_subboard(const Env& env, Board& local_board) {
     for (int i = 0; i < env.local_rows; ++i) {
         MPI_Recv(local_board[i + env.ghost].data() + env.ghost, env.m, MPI_CHAR, ROOT, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
     }
 }
 
+// All processes: exchange ghost rows with neighboring processes (one-to-one)
 void exchange_ghost_rows(const Env& env, Board& local_board) {
     int tag = 1;
     MPI_Status status;
 
-    // g번째 ghost row 교환
+    // Exchange g-th ghost row
     for (int g = 0; g < env.ghost; ++g) {
-        // 위쪽 이웃과 교환
+        // Exchange with the upper neighbor
         if (env.rank > 0) {
             MPI_Sendrecv(
                 local_board[env.ghost + g].data() + env.ghost, env.m, MPI_CHAR, env.rank - 1, tag,
@@ -41,7 +42,7 @@ void exchange_ghost_rows(const Env& env, Board& local_board) {
             );
         }
     
-        // 아래쪽 이웃과 교환
+        // Exchange with the lower neighbor
         if (env.rank < env.size - 1) {
             MPI_Sendrecv(
                 local_board[env.local_rows             + g].data() + env.ghost, env.m, MPI_CHAR, env.rank + 1, tag,
@@ -52,6 +53,7 @@ void exchange_ghost_rows(const Env& env, Board& local_board) {
     }
 }
 
+// All processes: compute next generation of cells based on current board
 void compute_next_generation(const Env& env, const Board& current, Board& next) {
     for (int i = env.ghost; i < env.ghost + env.local_rows; ++i) {
         for (int j = env.ghost; j < env.ghost + env.m; ++j) {
@@ -74,6 +76,7 @@ void compute_next_generation(const Env& env, const Board& current, Board& next) 
     }
 }
 
+// Master process: gathers local boards from all processes and prints the full board
 void gather_result_and_print(const Env& env, const Board& local_board) {
     int row_size = env.m;
     vector<char> sendbuf(env.local_rows * row_size);
@@ -87,7 +90,7 @@ void gather_result_and_print(const Env& env, const Board& local_board) {
         vector<int> displs(env.size);
         int offset = 0;
 
-        // recvcounts, displacements 계산
+        // Calculate recvcounts and displacements
         for (int i = 0; i < env.size; ++i) {
             int rows = (i == env.size - 1) ? env.base + env.remainder : env.base;
             recvcounts[i] = rows * row_size;
@@ -95,13 +98,13 @@ void gather_result_and_print(const Env& env, const Board& local_board) {
             offset += recvcounts[i];
         }
 
-        vector<char> recvbuf(env.m * env.m); // 전체 보드 크기만큼
+        vector<char> recvbuf(env.m * env.m); // Entire board size
 
         MPI_Gatherv(sendbuf.data(), env.local_rows * row_size, MPI_CHAR,
                     recvbuf.data(), recvcounts.data(), displs.data(), MPI_CHAR,
                     ROOT, MPI_COMM_WORLD);
 
-        // 출력
+        // Print
         for (int i = 0; i < env.m; ++i) {
             for (int j = 0; j < env.m; ++j)
                 cout << recvbuf[i * row_size + j];
@@ -131,12 +134,16 @@ int main(int argc, char* argv[]) {
     MPI_Bcast(&N, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
     MPI_Bcast(&ghost, 1, MPI_INT, ROOT, MPI_COMM_WORLD);
 
-    // 공통 환경 설정 & 각 프로세스의 로컬 보드 (ghost 포함) 생성
+    // Common environment setup
     Env env(m, N, ghost, size, rank);
-    Board local_board(env.total_rows, vector<char>(env.total_cols));
-    Board  next_board(env.total_rows, vector<char>(env.total_cols));;
 
-    // 전체 보드는 rank 0만 가짐
+    // create local board for each process (including ghost)
+    int total_rows =env.local_rows + 2 * ghost;
+    int total_cols = m + 2 * ghost;
+    Board local_board(total_rows, vector<char>(total_cols));
+    Board  next_board(total_rows, vector<char>(total_cols));;
+
+    // Entire board is only held by rank 0
     Board board;
     if (rank == ROOT) {
         board.resize(m, vector<char>(m));
@@ -149,7 +156,7 @@ int main(int argc, char* argv[]) {
         receive_subboard(env, local_board);
     }
 
-    // ghost 교환, 세대 계산, 결과 수집 등 구현
+    // Implement ghost exchange, generation computation, result collection, etc.
     for (int gen = 0; gen < N; ++gen) {
         exchange_ghost_rows(env, local_board);
         compute_next_generation(env, local_board, next_board);
