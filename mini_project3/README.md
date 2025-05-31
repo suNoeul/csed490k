@@ -29,10 +29,6 @@ which mpirun        # e.g. /usr/bin/mpirun
 
 <br>
 
-g++ -O2 -std=c++17 -o project3-serial project3-serial.cpp
-i=1; ./project3-serial < ./sample/input${i}.txt > ./sample/serial_output${i}.txt
-i=1; diff -bwi ./sample/output${i}.txt ./sample/serial_output${i}.txt
-
 ## 🚀 How to Compile and Run
 ```bash
 # 1. Compile the MPI-based Game of Life & Serial Baseline version
