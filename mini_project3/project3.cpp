@@ -26,30 +26,50 @@ void receive_subboard(const Env& env, Board& local_board) {
     }
 }
 
-// All processes: exchange ghost rows with neighboring processes (one-to-one)
+// All processes: exchange ghost rows with neighboring processes (batched)
 void exchange_ghost_rows(const Env& env, Board& local_board) {
     int tag = 1;
-    MPI_Status status;
+    int cols = env.m;
+    int g = env.ghost;
 
-    // Exchange g-th ghost row
-    for (int g = 0; g < env.ghost; ++g) {
-        // Exchange with the upper neighbor
-        if (env.rank > 0) {
-            MPI_Sendrecv(
-                local_board[env.ghost + g].data() + env.ghost, env.m, MPI_CHAR, env.rank - 1, tag,
-                local_board[            g].data() + env.ghost, env.m, MPI_CHAR, env.rank - 1, tag,
-                MPI_COMM_WORLD, MPI_STATUS_IGNORE
-            );
-        }
-    
-        // Exchange with the lower neighbor
-        if (env.rank < env.size - 1) {
-            MPI_Sendrecv(
-                local_board[env.local_rows             + g].data() + env.ghost, env.m, MPI_CHAR, env.rank + 1, tag,
-                local_board[env.local_rows + env.ghost + g].data() + env.ghost, env.m, MPI_CHAR, env.rank + 1, tag,
-                MPI_COMM_WORLD, MPI_STATUS_IGNORE
-            );
-        }
+    // Exchange with the upper neighbor
+    if (env.rank > 0) {
+        // Send buffer: g rows from top of local region
+        vector<char> sendbuf(g * cols);
+        for (int i = 0; i < g; ++i)
+            for (int j = 0; j < cols; ++j)
+                sendbuf[i * cols + j] = local_board[env.ghost + i][env.ghost + j];
+
+        // Receive buffer: g rows into top ghost region
+        vector<char> recvbuf(g * cols);
+
+        MPI_Sendrecv(sendbuf.data(), g * cols, MPI_CHAR, env.rank - 1, tag,
+                     recvbuf.data(), g * cols, MPI_CHAR, env.rank - 1, tag,
+                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+        for (int i = 0; i < g; ++i)
+            for (int j = 0; j < cols; ++j)
+                local_board[i][env.ghost + j] = recvbuf[i * cols + j];
+    }
+
+    // Exchange with the lower neighbor
+    if (env.rank < env.size - 1) {
+        // Send buffer: g rows from bottom of local region
+        vector<char> sendbuf(g * cols);
+        for (int i = 0; i < g; ++i)
+            for (int j = 0; j < cols; ++j)
+                sendbuf[i * cols + j] = local_board[env.ghost + env.local_rows - g + i][env.ghost + j];
+
+        // Receive buffer: g rows into bottom ghost region
+        vector<char> recvbuf(g * cols);
+
+        MPI_Sendrecv(sendbuf.data(), g * cols, MPI_CHAR, env.rank + 1, tag,
+                     recvbuf.data(), g * cols, MPI_CHAR, env.rank + 1, tag,
+                     MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+        for (int i = 0; i < g; ++i)
+            for (int j = 0; j < cols; ++j)
+                local_board[env.ghost + env.local_rows + i][env.ghost + j] = recvbuf[i * cols + j];
     }
 }
 
