@@ -7,7 +7,7 @@ cd "$ROOT" || exit 1
 OUTPUT_CSV="results.csv"
 echo "n_process,input_file,time_sec,validation" > "$OUTPUT_CSV"
 
-for n in 1 2 4 8; do
+for n in 1 2 4 8 16; do
   for i in {1..5}; do
     input_file="./sample/input${i}.txt"
     output_file="./sample/my_output${i}.txt"
@@ -17,7 +17,7 @@ for n in 1 2 4 8; do
     start_time=$(date +%s.%N)
 
     # Execute the program
-    mpirun -np "$n" ./project3 < "$input_file" > "$output_file"
+    mpirun --oversubscribe -np "$n" ./project3 < "$input_file" > "$output_file"
 
     # End measuring time
     end_time=$(date +%s.%N)
