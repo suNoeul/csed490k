@@ -1,4 +1,11 @@
 /.vscode
+# Ignore all except the following items in mini_project1
+/mini_project1/*
+!/mini_project1/Makefile
+!/mini_project1/README
+!/mini_project1/lu-omp.cpp
+!/mini_project1/benchmark.sh
+
 
 # Ignore all except the following items in mini_project2
 /mini_project2/*
@@ -9,3 +16,12 @@
 !/mini_project2/._lu-omp.cpp
 !/mini_project2/._lu-pthread.cpp
 !/mini_project2/run_all.sh
+
+
+# Ignore all except the following items in mini_project3
+/mini_project3/*
+!/mini_project3/project3.cpp
+!/mini_project3/project3.hpp
+!/mini_project3/writeup.md
+!/mini_project3/sample/input*.txt
+!/mini_project3/sample/output*.txt
