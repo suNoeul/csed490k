@@ -25,7 +25,7 @@
 /mini_project3/*
 !/mini_project3/project3.cpp
 !/mini_project3/project3.hpp
-!/mini_project3/README
+!/mini_project3/README.md
 !/mini_project3/*.pdf
 !/mini_project3/run_experiments.sh
 
