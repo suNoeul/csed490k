@@ -7,7 +7,7 @@ cd "$ROOT" || exit 1
 OUTPUT_CSV="results.csv"
 echo "n_process,input_file,time_sec,validation" > "$OUTPUT_CSV"
 
-for n in 1 2 4 8 16; do
+for n in 0 1 2 4 8 16; do
   for i in {1..5}; do
     input_file="./sample/input${i}.txt"
     output_file="./sample/my_output${i}.txt"
@@ -16,8 +16,13 @@ for n in 1 2 4 8 16; do
     # Start measuring time
     start_time=$(date +%s.%N)
 
-    # Execute the program
-    mpirun --oversubscribe -np "$n" ./project3 < "$input_file" > "$output_file"
+    if [ "$n" -eq 0 ]; then
+      # Baseline: run serial version
+      ./project3-serial < "$input_file" > "$output_file"
+    else
+      # Parallel: run MPI version
+      mpirun --oversubscribe -np "$n" ./project3 < "$input_file" > "$output_file"
+    fi
 
     # End measuring time
     end_time=$(date +%s.%N)

@@ -29,21 +29,23 @@ which mpirun        # e.g. /usr/bin/mpirun
 
 <br>
 
-
+g++ -O2 -std=c++17 -o project3-serial project3-serial.cpp
+i=1; ./project3-serial < ./sample/input${i}.txt > ./sample/serial_output${i}.txt
+i=1; diff -bwi ./sample/output${i}.txt ./sample/serial_output${i}.txt
 
 ## 🚀 How to Compile and Run
 ```bash
-# 1. Compile the MPI-based Game of Life
+# 1. Compile the MPI-based Game of Life & Serial Baseline version
 mpiCC -o project3 project3.cpp
+g++ -O2 -std=c++17 -o project3-serial project3-serial.cpp 
 
-# 2. Run with a Sample Input
+# 2. Run a Sample Input with MPI (e.g., 4 processes)
 i=1; mpirun -np 4 ./project3 < ./sample/input${i}.txt > ./sample/my_output${i}.txt
 
 # 3. Verify Output Correctness
-i=1; diff -bwi ./sample/output${i}.txt ./sample/my_output${i}.txt
+i=1; diff -bwi ./sample/output${i}.txt ./sample/my_output${i}.txt  
 ```
 If the files are identical, `diff` will return no output (indicating a correct result).
-
 
 
 <br>
@@ -51,8 +53,9 @@ If the files are identical, `diff` will return no output (indicating a correct r
 
 
 ## 📊 Performance Measurement Script
+⚠️ **Note:** This script assumes that both `project3` (MPI version) and `project3-serial` (serial baseline) executables **already exist** in the same directory. Make sure you compile them before running the script.
 
-To benchmark execution time across multiple process counts (`1, 2, 4, 8`), use the provided shell script:
+To benchmark execution time across multiple process counts (`0, 1, 2, 4, 8`), use the provided shell script:
 
 ```bash
 chmod +x run_experiments.sh
@@ -60,9 +63,11 @@ chmod +x run_experiments.sh
 ```
 
 This script performs the following:
-- Executes `project3` for inputs `input1.txt` to `input5.txt`
-- Varies the number of MPI processes (`-np 1`, `-np 2`, `-np 4`, `-np 8`)
+- Executes:
+    - `project3-serial` when `n=0` (serves as the baseline serial version)
+    - `project3` with `mpirun -np n` when `n > 0` (parallel MPI version)
+- Runs across inputs `input1.txt` to `input5.txt`
 - Measures and logs execution time
-- Verifies the correctness of output
-- Saves the results to a CSV file named `results.csv`
+- Compares each output with the ground truth
+- Saves all results to a CSV file named `results.csv`
 
