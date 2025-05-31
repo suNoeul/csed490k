@@ -23,6 +23,7 @@
 
 # Ignore all except the following items in mini_project3
 /mini_project3/*
+!/mini_project3/project3-serial.cpp
 !/mini_project3/project3.cpp
 !/mini_project3/project3.hpp
 !/mini_project3/README.md
