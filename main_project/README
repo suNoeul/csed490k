@@ -1,0 +1,43 @@
+1. answers files follow the form of "dp, tp, pp" : N ms/iter. In one iteration, we process 1 batch.
+2. Before executing the examples, make sure that your project path is added to the $PYTHONPATH. 
+    
+## Updates
+
+### 1. Grading Policy Changes
+
+As announced during the lecture, the grading policy for the main project has been updated:
+
+- The main project score will be treated as **extra credit**.  
+  This means **you can receive full marks without submitting the main project**, as long as you score perfectly on all other assignments and exams.  
+  The main project score will be added *after* your final total score is calculated, to fill in any deductions.
+  
+- There will be **no submission server** or **competitive evaluation**.  
+  TAs will **manually evaluate** your code and report.
+
+---
+
+### 2. Submission Policy Changes
+
+- More example cases have been added to the skeleton code to help you implement the searcher.
+- You must submit **all files** in the skeleton code directory.
+- There are **no restrictions** on submission format (file names, extensions, etc.).
+- You must also submit a **report (PDF format)** explaining your implementation.
+
+**Grading Breakdown:**
+
+- **70%** — Program performance: how effectively your program finds the optimal parallelism strategy.
+- **30%** — Report: clarity and detail in explaining your implementation and design decisions.
+
+---
+
+### 3. Format Changes in Example Files
+
+- `tp_target_out_tensors_MB` has been **renamed** to `tp_comm_sum_MB`,  
+  which indicates the **total size of tensors that require network communication for TP synchronization**.
+- A new field `tp_comm` has been **added**,  
+  specifying the **communication type and size** for tensors split by TP.
+- `batch_size` has been renamed to `global_batch_size`,  
+  indicating the total batch size processed by the **entire cluster**.  
+  For example, if `global_batch_size` is 16 and 2 GPUs are used with DP, each GPU handles 8 samples.
+
+---
