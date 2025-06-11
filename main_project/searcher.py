@@ -2,29 +2,53 @@ import concurrent.futures
 import json
 import os
 
+BASE_EFF                = 0.35   # 단일-GPU 연산 효율
+DP_EFF_PENALTY_FACTOR   = 0.20   # Data-parallel 증가 시 효율 저하 계수
+TP_EFF_PENALTY_FACTOR   = 0.25   # Tensor-parallel 증가 시 효율 저하 계수
+OVERLAP_RATIO_PP        = 0.60   # 1F1B 파이프라인 겹침 비율
+
 class Searcher:
+
     @staticmethod
-    def estimate_compute_time(dp, tp, pp, total_tflops, gpu_flops, overlap_ratio=0.6):
-        effective_flops = dp * tp * pp * overlap_ratio
-        tflops_per_gpu = total_tflops / effective_flops
-        compute_time_sec = tflops_per_gpu / (gpu_flops / 1000)  # TFLOPs / TFLOPs/s
+    def estimate_compute_time(dp, tp, pp, total_tflops, gpu_flops):
+        eff = BASE_EFF
+        eff /= (1 + DP_EFF_PENALTY_FACTOR * (dp - 1))
+        eff /= (1 + TP_EFF_PENALTY_FACTOR * (tp - 1))
+        eff /= (1 + 0.1 * abs(dp - tp))          # 불균형 벌점
+        
+        compute_time_sec = total_tflops / (gpu_flops / 1000 * dp * tp) / eff # TFLOPs / TFLOPs/s
+        
+        if pp > 1:
+            compute_time_sec /= OVERLAP_RATIO_PP
         return compute_time_sec * 1000  # ms
 
     @staticmethod
-    def estimate_tp_time(tp_comm_sum_MB, bw_gpu_to_gpu):
-        return (tp_comm_sum_MB / 1024) / bw_gpu_to_gpu * 1000  # ms
-
-    @staticmethod
     def estimate_dp_time(dp_sum_gradient_MB, dp, n_gpu_per_node, bw_gpu_to_gpu, bw_inter_node):
+        if dp == 1:
+            return 0.0
+        comm_MB = dp_sum_gradient_MB * 2 * (dp - 1) / dp
         bandwidth = bw_gpu_to_gpu if dp <= n_gpu_per_node else bw_inter_node
-        return (dp_sum_gradient_MB / 1024) / bandwidth * 1000  # ms
+        bw_MBps = bandwidth * 1024  # GB/s -> MB/s
+        return (comm_MB / bw_MBps) * 1000  # ms
+
+    
+    @staticmethod
+    def estimate_tp_time(tp_comm_sum_MB, tp, bw_gpu_to_gpu):
+        if tp == 1:
+            return 0.0
+        comm_MB = (tp_comm_sum_MB / tp) * 2 * (tp - 1) / tp
+        bw_MBps = bw_gpu_to_gpu * 1024
+        return (comm_MB / bw_MBps) * 1000  # ms
+
 
     @staticmethod
     def estimate_pp_time(layer_activation_MB, pp, bw_gpu_to_gpu):
-        if pp <= 1:
+        if pp == 1:
             return 0.0
-        pp_comm_MB = sum(layer_activation_MB[:pp - 1])
-        return (pp_comm_MB / 1024) / bw_gpu_to_gpu * 1000  # ms
+        act_MB = max(layer_activation_MB)
+        comm_MB = (pp - 1) * 2 * act_MB
+        bw_MBps = bw_gpu_to_gpu * 1024            # GB/s → MB/s
+        return (comm_MB / bw_MBps) * 1000         # ms
 
     @staticmethod
     def evaluate_config(args):
@@ -52,8 +76,8 @@ class Searcher:
         total_tflops = 3 * sum(layer_tflops)
 
         compute_time = Searcher.estimate_compute_time(dp, tp, pp, total_tflops, gpu_flops)
-        tp_time = Searcher.estimate_tp_time(tp_comm_sum_MB, bw_gpu_to_gpu)
         dp_time = Searcher.estimate_dp_time(dp_sum_gradient_MB, dp, n_gpu_per_node, bw_gpu_to_gpu, bw_inter_node)
+        tp_time = Searcher.estimate_tp_time(tp_comm_sum_MB, tp, bw_gpu_to_gpu)
         pp_time = Searcher.estimate_pp_time(layer_activation_MB, pp, bw_gpu_to_gpu)
 
         total_time = compute_time + tp_time + dp_time + pp_time
