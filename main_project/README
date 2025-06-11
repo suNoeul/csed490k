@@ -41,3 +41,15 @@ As announced during the lecture, the grading policy for the main project has bee
   For example, if `global_batch_size` is 16 and 2 GPUs are used with DP, each GPU handles 8 samples.
 
 ---
+
+# CSED490K Main Project env recommendation
+
+## System environment
+- OS: WSL2 Ubuntu 22.04
+- Python: 3.10 (Miniconda base)
+- Conda Env Name: `csed490k-gpt`
+
+## conda env creation command
+```bash
+conda create -n csed490k-gpt python=3.10 -y
+```
